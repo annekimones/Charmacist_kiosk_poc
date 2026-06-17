@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>참약사 · 약국 키오스크 접수</title>
+<style>
+  :root{
+    --primary:#6C5CE7;
+    --primary-dark:#5847d6;
+    --primary-soft:#ECE9FB;
+    --primary-soft-2:#D9D2F7;
+    --ink:#1A1A2E;
+    --sub:#6b6b7b;
+    --line:#E5E5EC;
+    --bg:#F4F4F8;
+    --radius:20px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    background:#2c2c38;
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:24px;
+  }
+
+  /* ===== 키오스크 프레임 (세로형) ===== */
+  .kiosk{
+    width:480px;height:854px;max-height:94vh;
+    background:#fff;border-radius:36px;position:relative;overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;
+  }
+  /* 상단 헤더 */
+  .topbar{
+    height:64px;flex:0 0 64px;display:flex;align-items:center;
+    padding:0 18px;border-bottom:1px solid var(--line);gap:8px;
+  }
+  .topbar .icon-btn{
+    width:40px;height:40px;border-radius:12px;border:none;background:transparent;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    font-size:22px;color:#333;
+  }
+  .topbar .icon-btn:active{background:var(--bg);}
+  .topbar .title{flex:1;text-align:center;font-size:18px;font-weight:700;}
+  .topbar .spacer{width:40px;}
+
+  /* 진행 단계 표시줄 */
+  .progress{height:4px;background:var(--line);flex:0 0 4px;}
+  .progress > i{display:block;height:100%;background:var(--primary);width:0;transition:width .3s;}
+
+  /* 본문 */
+  .body{flex:1;overflow-y:auto;padding:26px 26px 0;display:flex;flex-direction:column;}
+  .body::-webkit-scrollbar{width:0;}
+
+  /* 하단 고정 버튼 영역 */
+  .footer{padding:16px 26px 26px;flex:0 0 auto;}
+
+  /* ===== 공통 요소 ===== */
+  .screen{display:none;flex-direction:column;flex:1;}
+  .screen.active{display:flex;}
+
+  .h-title{font-size:30px;font-weight:800;line-height:1.3;margin-bottom:8px;}
+  .h-sub{font-size:16px;color:var(--sub);margin-bottom:6px;}
+  .q-step{text-align:center;font-size:18px;color:var(--sub);margin-bottom:6px;font-weight:600;}
+  .q-text{text-align:center;font-size:26px;font-weight:800;line-height:1.4;margin-bottom:34px;}
+
+  .btn{
+    width:100%;border:none;border-radius:16px;padding:18px;font-size:18px;font-weight:700;
+    cursor:pointer;font-family:inherit;transition:.15s;
+  }
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:active{background:var(--primary-dark);}
+  .btn-primary:disabled{background:#C9C9D3;cursor:not-allowed;}
+  .btn-soft{background:var(--primary-soft);color:var(--primary);}
+  .btn-soft:active{background:var(--primary-soft-2);}
+  .btn-ghost{background:var(--primary-soft);color:var(--primary);}
+  .btn-row{display:flex;gap:12px;}
+  .btn-row .btn{flex:1;}
+
+  /* 사전문진 화면: 내용 세로 중앙 정렬 */
+  .screen.qa{justify-content:center;}
+  .screen.qa .q-text{margin-bottom:28px;}
+
+  /* 선택 카드 (2지선다 / 다지선다) */
+  .card-grid{display:flex;gap:14px;align-items:stretch;}
+  .card-grid.cols-3{gap:10px;}
+  .opt-card{
+    flex:1;border:1.5px solid var(--line);border-radius:18px;background:#fff;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:19px;font-weight:800;color:var(--ink);cursor:pointer;text-align:center;
+    padding:26px 10px;transition:.12s;box-shadow:0 5px 16px rgba(0,0,0,.05);line-height:1.35;
+  }
+  .opt-card .oic{
+    width:54px;height:54px;border-radius:16px;background:var(--primary-soft);
+    display:flex;align-items:center;justify-content:center;margin-bottom:14px;
+  }
+  .opt-card .oic svg{width:28px;height:28px;stroke:var(--primary);}
+  .opt-card .sm{font-size:14px;font-weight:600;color:var(--sub);margin-top:4px;}
+  .opt-card.sel{border-color:var(--primary);background:#FAF9FF;}
+  .opt-card.sel .oic{background:var(--primary);}
+  .opt-card.sel .oic svg{stroke:#fff;}
+  .opt-card:active{transform:scale(.97);}
+  .cols-3 .opt-card{font-size:17px;padding:24px 6px;}
+  .cols-3 .opt-card .oic{width:48px;height:48px;border-radius:14px;}
+  .cols-3 .opt-card .oic svg{width:24px;height:24px;}
+
+  /* 상담접수 선택 카드 (아이콘+제목+설명) */
+  .pick-grid{display:flex;gap:16px;margin-top:6px;}
+  .pick-card{
+    flex:1;border:1.5px solid var(--line);border-radius:20px;background:#fff;
+    display:flex;flex-direction:column;align-items:center;text-align:center;cursor:pointer;
+    padding:30px 18px 26px;transition:.15s;box-shadow:0 6px 18px rgba(0,0,0,.05);
+  }
+  .pick-card:active{transform:scale(.98);}
+  .pick-card:hover{border-color:var(--primary-soft-2);}
+  .pick-card .ic{
+    width:64px;height:64px;border-radius:18px;display:flex;align-items:center;justify-content:center;
+    margin-bottom:16px;
+  }
+  .pick-card .ic svg{width:32px;height:32px;}
+  .pick-card.light .ic{background:var(--primary-soft);}
+  .pick-card.dark .ic{background:var(--primary);}
+  .pick-card .pt{font-size:19px;font-weight:800;margin-bottom:6px;}
+  .pick-card .pd{font-size:13px;color:var(--sub);line-height:1.5;}
+
+  /* 가로 리스트 버튼(기타/아니요) */
+  .list-btn{
+    width:100%;border:1.5px solid var(--line);border-radius:14px;background:#fff;
+    padding:16px;font-size:17px;font-weight:700;cursor:pointer;margin-top:10px;font-family:inherit;
+    display:flex;align-items:center;justify-content:center;gap:9px;color:var(--ink);
+  }
+  .list-btn svg{width:20px;height:20px;stroke:var(--sub);}
+  .list-btn.sel{border-color:var(--primary);background:#FAF9FF;color:var(--primary);}
+  .list-btn.sel svg{stroke:var(--primary);}
+  .list-btn:active{transform:scale(.99);}
+
+  /* 복수 선택 칩 (질환) */
+  .q-help{text-align:center;font-size:14px;color:var(--sub);margin:-14px 0 18px;}
+  .chip-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;}
+  .chip{
+    flex:1 1 calc(50% - 5px);border:1.5px solid var(--line);border-radius:14px;background:#fff;
+    padding:18px 12px;font-size:17px;font-weight:700;cursor:pointer;text-align:center;
+    color:var(--ink);transition:.12s;
+  }
+  .chip.sel{border-color:var(--primary);background:#FAF9FF;color:var(--primary);}
+  .chip:active{transform:scale(.98);}
+
+  /* 기타 직접입력 박스 */
+  .etc-box{margin-top:14px;}
+  .etc-box input{
+    width:100%;border:1.5px solid var(--primary);border-radius:14px;padding:15px 16px;
+    font-size:16px;font-family:inherit;
+  }
+  .etc-box input:focus{outline:none;}
+
+  /* 마이데이터 연동 대기화면 */
+  .loading-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  .spinner{
+    width:64px;height:64px;border:6px solid var(--primary-soft);border-top-color:var(--primary);
+    border-radius:50%;animation:spin 1s linear infinite;margin-bottom:24px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* 마이데이터 약물카드 */
+  .med-card{
+    border:1.5px solid var(--line);border-radius:16px;padding:16px 16px 14px;margin-bottom:12px;
+    cursor:pointer;position:relative;transition:.12s;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.04);
+  }
+  .med-card:active{transform:scale(.99);}
+  .med-card.sel{border-color:var(--primary);background:#FAF9FF;}
+  .med-card .mc-check{
+    position:absolute;top:15px;right:15px;width:24px;height:24px;border-radius:50%;
+    border:2px solid #c8c3e6;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:14px;font-weight:700;
+  }
+  .med-card.sel .mc-check{background:var(--primary);border-color:var(--primary);}
+  .med-card .mc-date{font-size:13px;font-weight:700;color:var(--sub);padding-right:30px;}
+  .med-card .mc-org{font-size:14px;color:#333;margin-top:5px;}
+  .med-card .mc-org b{color:#222;font-weight:700;}
+  .med-card .mc-drug{font-size:18px;font-weight:800;color:var(--ink);margin-top:9px;}
+  .med-card .mc-dose{
+    display:inline-flex;gap:10px;margin-top:7px;font-size:13px;font-weight:700;color:var(--primary);
+    background:var(--primary-soft);border-radius:8px;padding:6px 11px;
+  }
+  .med-card .mc-meta{font-size:13px;color:#555;margin-top:10px;line-height:1.8;}
+  .med-card .mc-meta .row{display:flex;flex-wrap:wrap;gap:4px 14px;}
+  .med-card .mc-meta b{color:#222;font-weight:600;}
+
+  /* 폼 필드 */
+  .field{margin-bottom:18px;}
+  .field label{display:block;font-size:15px;font-weight:700;margin-bottom:8px;color:#333;}
+  .field input,.field select{
+    width:100%;border:1.5px solid var(--line);border-radius:14px;padding:15px 16px;
+    font-size:16px;font-family:inherit;background:#fff;color:var(--ink);
+  }
+  .field input::placeholder{color:#b5b5c0;}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--primary);}
+  .field-2{display:flex;gap:10px;align-items:center;}
+  .field-2 input{flex:1;}
+  .field-2 .dash{color:var(--sub);font-weight:700;}
+
+  /* 카메라 뷰 */
+  .camera{
+    flex:1;border-radius:16px;margin:6px 0 14px;position:relative;overflow:hidden;
+    background:linear-gradient(135deg,#d7d2e8,#bcb4d8);min-height:360px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .camera .frame{
+    position:absolute;inset:34px 30px;border:3px solid #ff5a5a;border-radius:6px;
+  }
+  .camera .paper{
+    width:62%;height:74%;background:#fff;border:1px solid #ccc;border-radius:4px;
+    box-shadow:0 6px 20px rgba(0,0,0,.2);display:flex;flex-direction:column;
+    padding:10px;gap:5px;
+  }
+  .camera .paper .pt{height:9px;background:#eceaf2;border-radius:2px;}
+  .camera .paper .pt.w70{width:70%;margin:0 auto 4px;}
+  .camera .paper .pbody{flex:1;border:1px solid #e3e1ec;border-radius:3px;margin-top:4px;}
+  .cam-hint{text-align:center;font-size:16px;color:var(--sub);margin-bottom:14px;}
+  .shutter{
+    width:74px;height:74px;border-radius:50%;background:var(--primary);border:5px solid #fff;
+    box-shadow:0 0 0 3px var(--primary);margin:0 auto 6px;cursor:pointer;
+  }
+  .shutter:active{transform:scale(.94);}
+
+  /* 완료 화면 */
+  .done-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px;}
+  .done-circle{width:96px;height:96px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;margin-bottom:18px;}
+  .done-circle svg{width:48px;height:48px;}
+  .done-title{font-size:28px;font-weight:800;}
+  .done-sub{font-size:22px;font-weight:600;}
+  .done-note{font-size:15px;color:#b0b0bc;margin-top:18px;line-height:1.6;}
+  .callno-box{
+    margin-top:26px;background:var(--primary-soft);border-radius:22px;padding:24px 48px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .callno-box .cn-label{font-size:16px;font-weight:700;color:var(--primary);margin-bottom:6px;}
+  .callno-box .cn-num{font-size:64px;font-weight:800;color:var(--primary);line-height:1;}
+
+  /* 시작 화면 */
+  .start{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;gap:18px;}
+  .start .logo{width:104px;height:104px;border-radius:28px;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:46px;font-weight:800;box-shadow:0 14px 34px rgba(108,92,231,.4);}
+  .start .brand{font-size:34px;font-weight:800;}
+  .start .desc{font-size:18px;color:var(--sub);}
+  .start .touch{margin-top:24px;font-size:16px;color:var(--primary);font-weight:700;animation:blink 1.4s infinite;}
+  @keyframes blink{50%{opacity:.35;}}
+
+  .hidden{display:none!important;}
+  .toast{
+    position:absolute;bottom:96px;left:50%;transform:translateX(-50%);
+    background:#1a1a2e;color:#fff;padding:12px 20px;border-radius:30px;font-size:14px;
+    opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;
+  }
+  .toast.show{opacity:.95;}
+</style>
+</head>
+<body>
+<div class="kiosk">
+  <!-- 헤더 -->
+  <div class="topbar" id="topbar">
+    <button class="icon-btn" id="backBtn" onclick="goBack()">‹</button>
+    <div class="title" id="topTitle"></div>
+    <button class="icon-btn" id="homeBtn" onclick="goHome()" title="홈">⌂</button>
+  </div>
+  <div class="progress" id="progress"><i id="progressBar"></i></div>
+
+  <div class="body" id="body">
+
+    <!-- 0. 시작 -->
+    <section class="screen active" data-screen="start">
+      <div class="start" onclick="next('purpose')">
+        <div class="logo">참</div>
+        <div class="brand">참약사</div>
+        <div class="desc">약국 무인 접수 · 사전문진</div>
+        <div class="touch">화면을 터치하여 접수를 시작하세요</div>
+      </div>
+    </section>
+
+    <!-- 0. 방문목적 -->
+    <section class="screen qa" data-screen="purpose">
+      <div class="q-text">방문 목적이 무엇인가요?</div>
+      <div class="card-grid cols-3">
+        <div class="opt-card" onclick="pickPurpose('약품/영양제 구매', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5h12l-1 11.5H7L6 8.5z"/><path d="M9 8.5a3 3 0 0 1 6 0"/></svg></span>약품/영양제<br>구매</div>
+        <div class="opt-card" onclick="pickPurpose('처방전 조제', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5"/><path d="M9 13h6M9 16.5h4"/></svg></span>처방전<br>조제</div>
+        <div class="opt-card" onclick="pickPurpose('건강상담', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.5-4.6A8 8 0 1 1 20.5 11.5z"/></svg></span>건강상담</div>
+      </div>
+    </section>
+
+    <!-- 2. 처방전 촬영 -->
+    <section class="screen" data-screen="capture">
+      <div class="camera">
+        <div class="frame"></div>
+        <div class="paper">
+          <div class="pt w70"></div>
+          <div class="pt" style="width:90%"></div>
+          <div class="pt" style="width:80%"></div>
+          <div class="pbody"></div>
+        </div>
+      </div>
+      <p class="cam-hint">사각형 영역 안에 맞춰 촬영해주세요.</p>
+      <div id="captureShutter">
+        <div class="shutter" onclick="captureShot()"></div>
+      </div>
+      <div id="captureConfirm" class="hidden btn-row" style="margin-top:8px;">
+        <button class="btn btn-soft" onclick="retakeShot()">재촬영</button>
+        <button class="btn btn-primary" onclick="next('survey-1')">확인</button>
+      </div>
+    </section>
+
+    <!-- 사전문진 1/5 : 복용 중인 약 -->
+    <section class="screen qa" data-screen="survey-1">
+      <div class="q-step">(1/5)</div>
+      <div class="q-text">현재 복용 중인 약이<br>있으신가요?</div>
+      <div class="card-grid">
+        <div class="opt-card" onclick="answerYesNo('takingMeds', true, this, 'mydata-input')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></span>네</div>
+        <div class="opt-card" onclick="answerYesNo('takingMeds', false, this, 'survey-4')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></span>아니요</div>
+      </div>
+    </section>
+
+    <!-- 사전문진 2/5 : 임신 -->
+    <section class="screen qa" data-screen="survey-2">
+      <div class="q-step">(2/5)</div>
+      <div class="q-text">현재 임신중이신가요?</div>
+      <div class="card-grid">
+        <div class="opt-card" onclick="answerYesNo('pregnant', true, this, 'survey-2w')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></span>네</div>
+        <div class="opt-card" onclick="answerYesNo('pregnant', false, this, 'survey-3')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></span>아니요</div>
+      </div>
+    </section>
+
+    <!-- 사전문진 2/5 : 임신 기수 -->
+    <section class="screen qa" data-screen="survey-2w">
+      <div class="q-step">(2/5)</div>
+      <div class="q-text">현재 임신 기수가<br>어떻게 되시나요?</div>
+      <div class="card-grid cols-3">
+        <div class="opt-card" onclick="pickWeek('1기', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5S3.5 15 3.5 8.8A4.3 4.3 0 0 1 12 6.5a4.3 4.3 0 0 1 8.5 2.3C20.5 15 12 20.5 12 20.5z"/></svg></span>1기<span class="sm">1~13주</span></div>
+        <div class="opt-card" onclick="pickWeek('2기', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5S3.5 15 3.5 8.8A4.3 4.3 0 0 1 12 6.5a4.3 4.3 0 0 1 8.5 2.3C20.5 15 12 20.5 12 20.5z"/></svg></span>2기<span class="sm">14~27주</span></div>
+        <div class="opt-card" onclick="pickWeek('3기', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5S3.5 15 3.5 8.8A4.3 4.3 0 0 1 12 6.5a4.3 4.3 0 0 1 8.5 2.3C20.5 15 12 20.5 12 20.5z"/></svg></span>3기<span class="sm">28주~</span></div>
+      </div>
+    </section>
+
+    <!-- 사전문진 3/5 : 수유 -->
+    <section class="screen qa" data-screen="survey-3">
+      <div class="q-step">(3/5)</div>
+      <div class="q-text">현재 수유중이신가요?</div>
+      <div class="card-grid">
+        <div class="opt-card" onclick="answerYesNo('breastfeeding', true, this, '__stay__')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg></span>네</div>
+        <div class="opt-card" onclick="answerYesNo('breastfeeding', false, this, '__stay__')"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></span>아니요</div>
+      </div>
+    </section>
+
+    <!-- 사전문진 4/5 : 알레르기 -->
+    <section class="screen qa" data-screen="survey-4">
+      <div class="q-step">(4/5)</div>
+      <div class="q-text">약물 알레르기 또는<br>부작용 경험이 있으신가요?</div>
+      <div class="card-grid cols-3">
+        <div class="opt-card" onclick="pickAllergy('항생제', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3.8l9.7 9.7a4.6 4.6 0 1 1-6.5 6.5L4 10.3a4.6 4.6 0 1 1 6.5-6.5z"/><path d="M7.2 7.2l9.6 9.6"/></svg></span>항생제</div>
+        <div class="opt-card" onclick="pickAllergy('진통소염제', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M6.5 12h11"/></svg></span>진통소염제</div>
+        <div class="opt-card" onclick="pickAllergy('조영제', this)"><span class="oic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5s6.5 7 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10.5 12 3.5 12 3.5z"/></svg></span>조영제</div>
+      </div>
+      <button class="list-btn" onclick="pickAllergy('기타', this)"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>기타 (직접 입력)</button>
+      <button class="list-btn" onclick="pickAllergy('약이름 모름', this)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 1 1 4 2.5c-.9.5-1.3 1-1.3 1.9"/><path d="M12 17h.01"/></svg>약이름 모름</button>
+      <button class="list-btn" onclick="pickAllergy('없음', this)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>없음</button>
+      <div id="allergyEtc" class="etc-box hidden">
+        <input id="allergyEtcInput" placeholder="알레르기 약물명을 입력해주세요">
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="confirmAllergyEtc()">확인</button>
+      </div>
+    </section>
+
+    <!-- 사전문진 5/5 : 치료 중인 질환 (복수 선택) -->
+    <section class="screen" data-screen="survey-5">
+      <div class="q-step" style="margin-top:6px;">(5/5)</div>
+      <div class="q-text" style="margin-bottom:8px;">치료 중인 질환이<br>있으신가요?</div>
+      <p class="q-help">해당되는 항목을 모두 선택해주세요 (복수 선택 가능)</p>
+      <div class="chip-grid">
+        <div class="chip" onclick="toggleDisease('간질환', this)">간질환</div>
+        <div class="chip" onclick="toggleDisease('신장질환', this)">신장질환</div>
+        <div class="chip" onclick="toggleDisease('심장질환', this)">심장질환</div>
+        <div class="chip" onclick="toggleDisease('고혈압', this)">고혈압</div>
+        <div class="chip" onclick="toggleDisease('당뇨', this)">당뇨</div>
+        <div class="chip" onclick="toggleDisease('위장질환', this)">위장질환</div>
+        <div class="chip" onclick="toggleDisease('천식/호흡기질환', this)">천식/호흡기질환</div>
+        <div class="chip" onclick="toggleDisease('녹내장', this)">녹내장</div>
+        <div class="chip" onclick="toggleDisease('전립선질환', this)">전립선질환</div>
+        <div class="chip" onclick="toggleDisease('갑상선질환', this)">갑상선질환</div>
+        <div class="chip" onclick="toggleDiseaseEtc(this)">기타</div>
+      </div>
+      <div id="diseaseEtc" class="etc-box hidden">
+        <input id="diseaseEtcInput" placeholder="질환명을 직접 입력해주세요">
+      </div>
+    </section>
+
+    <!-- (약품/영양제 구매 시) 건강기능식품 기능성 선택 -->
+    <section class="screen" data-screen="supplement">
+      <div class="q-step" style="margin-top:6px;"></div>
+      <div class="q-text" style="margin-bottom:8px;">어떤 건강을 위한<br>영양제를 찾으세요?</div>
+      <p class="q-help">원하는 기능을 모두 선택해주세요 (복수 선택 가능)</p>
+      <div class="chip-grid">
+        <div class="chip" onclick="toggleSupp('눈 건강', this)">눈 건강</div>
+        <div class="chip" onclick="toggleSupp('장 건강', this)">장 건강</div>
+        <div class="chip" onclick="toggleSupp('면역력', this)">면역력</div>
+        <div class="chip" onclick="toggleSupp('피로 개선', this)">피로 개선</div>
+        <div class="chip" onclick="toggleSupp('관절 건강', this)">관절 건강</div>
+        <div class="chip" onclick="toggleSupp('뼈 건강', this)">뼈 건강</div>
+        <div class="chip" onclick="toggleSupp('근육 강화', this)">근육 강화</div>
+        <div class="chip" onclick="toggleSupp('혈행 개선', this)">혈행 개선</div>
+        <div class="chip" onclick="toggleSupp('수면·스트레스', this)">수면·스트레스</div>
+        <div class="chip" onclick="toggleSupp('피부 건강', this)">피부 건강</div>
+        <div class="chip" onclick="toggleSupp('간 건강', this)">간 건강</div>
+        <div class="chip" onclick="toggleSupp('항산화', this)">항산화</div>
+        <div class="chip" onclick="toggleSupp('두뇌 건강', this)">두뇌 건강</div>
+        <div class="chip" onclick="toggleSupp('여성 건강', this)">여성 건강</div>
+        <div class="chip" onclick="toggleSupp('남성 건강', this)">남성 건강</div>
+        <div class="chip" onclick="toggleSuppEtc(this)">기타</div>
+      </div>
+      <div id="suppEtc" class="etc-box hidden">
+        <input id="suppEtcInput" placeholder="원하는 기능을 직접 입력해주세요">
+      </div>
+    </section>
+
+    <!-- 마이데이터 조회 입력 -->
+    <section class="screen" data-screen="mydata-input">
+      <div class="field">
+        <label>본명</label>
+        <input id="md_name" placeholder="본명을 입력해주세요">
+      </div>
+      <div class="field">
+        <label>통신사</label>
+        <select id="md_telco"><option value="">선택</option><option>SKT</option><option>KT</option><option>LG U+</option><option>알뜰폰</option></select>
+      </div>
+      <div class="field">
+        <label>인증 방식</label>
+        <select id="md_auth"><option>간편인증</option><option>공동인증서</option><option>금융인증서</option></select>
+      </div>
+      <div class="field">
+        <label>인증서 종류</label>
+        <select id="md_cert"><option>카카오톡</option><option>네이버</option><option>토스</option><option>PASS</option></select>
+      </div>
+      <div class="field">
+        <label>휴대폰 번호</label>
+        <input id="md_phone" placeholder="전화번호를 입력해주세요">
+      </div>
+      <div class="field">
+        <label>주민등록번호</label>
+        <div class="field-2">
+          <input id="md_rrn1" placeholder="000000" maxlength="6">
+          <span class="dash">-</span>
+          <input id="md_rrn2" placeholder="0000000" maxlength="7" type="password">
+        </div>
+      </div>
+      <div class="field">
+        <label>조회 기간</label>
+        <div class="field-2">
+          <input id="md_from" placeholder="YYYY-MM-DD">
+          <span class="dash">~</span>
+          <input id="md_to" placeholder="YYYY-MM-DD">
+        </div>
+      </div>
+    </section>
+
+    <!-- 마이데이터 연동 대기화면 -->
+    <section class="screen" data-screen="mydata-loading">
+      <div class="loading-wrap">
+        <div class="spinner"></div>
+        <div class="done-title">마이데이터를 연동하고 있습니다</div>
+        <div class="done-sub" style="color:var(--sub);">잠시만 기다려 주세요</div>
+        <div class="done-note">인증 앱에서 요청을 확인해 주세요.</div>
+      </div>
+    </section>
+
+    <!-- 마이데이터 약물카드 선택 -->
+    <section class="screen" data-screen="mydata-cards">
+      <p class="q-help" style="margin:2px 0 14px;">약사에게 공유할 복약 정보를 선택해주세요 (복수 선택 가능)</p>
+      <div id="medCardList"></div>
+    </section>
+
+    <!-- 완료 -->
+    <section class="screen" data-screen="complete">
+      <div class="done-wrap">
+        <div class="done-circle">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="done-title">접수가 완료되었습니다</div>
+        <div class="done-sub">아래 호출번호로 안내해 드립니다</div>
+        <div class="callno-box">
+          <div class="cn-label">호출번호</div>
+          <div class="cn-num" id="doneCallNo">-</div>
+        </div>
+        <div class="done-note">호출번호가 불리면 약사에게 방문해 주세요.<br>잠시 후 자동으로 처음 화면으로 돌아갑니다.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 하단 버튼 -->
+  <div class="footer" id="footer"></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ===== 상태 ===== */
+const state = {
+  purpose:null,            // 약품/영양제 구매 · 처방전 조제 · 건강상담
+  hasPrescription:false,   // 처방전 조제 여부(촬영)
+  takingMeds:null,         // 복용 중인 약(예→마이데이터)
+  name:null,               // 마이데이터 조회 본명
+  mydataSelected:[],       // 선택한 약물카드 인덱스
+  mydataCards:[],          // 약사에게 전송한 약물카드
+  pregnant:null, week:null,
+  breastfeeding:null,
+  allergy:null,
+  diseases:[], diseasesEtc:'',
+  supplements:[], supplementsEtc:'',  // 약품/영양제 구매 시 희망 건기식 기능성
+  callNo:null                         // 발급된 호출번호(접수번호)
+};
+
+/* 호출번호 시퀀스(환자마다 1씩 증가, 리셋되지 않음) */
+let callSeq = 0;
+
+/* 화면 흐름(뒤로가기용 스택) */
+const stack = [];
+let current = 'start';
+
+/* 화면별 메타: 제목, 진행률(%), 하단버튼 HTML */
+const META = {
+  'start':        {title:'',              prog:0,   header:false},
+  'purpose':      {title:'방문목적',       prog:6,   footer:''},
+  'capture':      {title:'처방전 촬영',    prog:14,  footer:''},
+  'survey-1':     {title:'사전문진',       prog:22,  footer:''},
+  'mydata-input': {title:'마이데이터 조회 입력', prog:30,
+                   footer:'<button class="btn btn-primary" onclick="validateInput()">다음</button>'},
+  'mydata-loading':{title:'마이데이터 연동', prog:38, footer:''},
+  'mydata-cards': {title:'마이데이터 약물카드', prog:46,
+                   footer:'<button class="btn btn-primary" onclick="sendMydata()">확인</button>'},
+  // 새 순서: 복용약(1) → 알레르기(survey-4) → 질환(survey-5) → 영양상담 → 임신(survey-2) → 수유(survey-3)
+  'survey-4':     {title:'사전문진',       prog:55,
+                   footer:''},
+  'survey-5':     {title:'사전문진',       prog:64,
+                   footer:'<button class="btn btn-primary" onclick="finishSurvey()">다음</button>'},
+  'supplement':   {title:'영양제 상담',     prog:74,
+                   footer:'<button class="btn btn-primary" onclick="finishSupplement()">다음</button>'},
+  'survey-2':     {title:'사전문진',       prog:82,  footer:''},
+  'survey-2w':    {title:'사전문진',       prog:85,  footer:''},
+  'survey-3':     {title:'사전문진',       prog:95,
+                   footer:'<button class="btn btn-primary" onclick="submitToPharmacist()">약사에게 전송하기</button>'},
+  'complete':     {title:'',              prog:100, header:false}
+};
+
+/* 사전문진 단계 순서(방문목적에 따라 영양상담 포함 여부 결정) → (x/n) 자동 계산 */
+const SURVEY_ORDER = {
+  buy:   ['survey-1','survey-4','survey-5','supplement','survey-2','survey-3'],
+  other: ['survey-1','survey-4','survey-5','survey-2','survey-3']
+};
+function updateStepLabel(screen){
+  const order = (state.purpose==='약품/영양제 구매') ? SURVEY_ORDER.buy : SURVEY_ORDER.other;
+  const key = (screen==='survey-2w') ? 'survey-2' : screen;  // 임신 기수는 임신과 같은 번호
+  const idx = order.indexOf(key);
+  if(idx<0) return;
+  const el = document.querySelector(`[data-screen="${screen}"] .q-step`);
+  if(el) el.textContent = `(${idx+1}/${order.length})`;
+}
+
+/* ===== 화면 전환 ===== */
+function show(screen, isBack){
+  if(!isBack && screen!==current){ stack.push(current); }
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelector(`[data-screen="${screen}"]`).classList.add('active');
+  current = screen;
+  const m = META[screen];
+  // 헤더
+  document.getElementById('topbar').style.display = (m.header===false)?'none':'flex';
+  document.getElementById('progress').style.display = (m.header===false)?'none':'block';
+  document.getElementById('topTitle').textContent = m.title||'';
+  // 시작화면이면 뒤로가기 숨김
+  document.getElementById('backBtn').style.visibility = (stack.length>0)?'visible':'hidden';
+  // 진행률
+  document.getElementById('progressBar').style.width = (m.prog||0)+'%';
+  // 사전문진 단계 번호(x/n) 자동 계산
+  updateStepLabel(screen);
+  // 하단 버튼
+  document.getElementById('footer').innerHTML = m.footer||'';
+  document.getElementById('footer').style.display = (m.footer)?'block':'none';
+  // body 스크롤 맨 위로
+  document.getElementById('body').scrollTop = 0;
+}
+function next(screen){ show(screen, false); }
+function goBack(){
+  if(stack.length>0){ const prev = stack.pop(); show(prev, true); }
+}
+function goHome(){
+  if(confirm('접수를 처음부터 다시 시작하시겠습니까?')) resetAll();
+}
+
+/* ===== 0. 방문목적 ===== */
+function pickPurpose(p, card){
+  clearSel(card); card.classList.add('sel');
+  state.purpose = p;
+  state.hasPrescription = (p==='처방전 조제');
+  setTimeout(()=> next(state.hasPrescription ? 'capture' : 'survey-1'), 180);
+}
+
+/* 처방전 촬영 */
+function captureShot(){
+  document.getElementById('captureShutter').classList.add('hidden');
+  document.getElementById('captureConfirm').classList.remove('hidden');
+  toast('촬영 완료');
+}
+function retakeShot(){
+  document.getElementById('captureShutter').classList.remove('hidden');
+  document.getElementById('captureConfirm').classList.add('hidden');
+}
+
+/* ===== 사전문진 ===== */
+function clearSel(card){
+  card.parentElement.querySelectorAll('.opt-card').forEach(c=>c.classList.remove('sel'));
+}
+function answerYesNo(key, val, card, nextScreen){
+  clearSel(card); card.classList.add('sel');
+  state[key]=val;
+  if(nextScreen==='__stay__') return;          // 선택만(전송은 하단 버튼으로)
+  setTimeout(()=> nextScreen==='__submit__' ? submitToPharmacist() : next(nextScreen), 180);
+}
+function pickWeek(w, card){
+  clearSel(card); card.classList.add('sel');
+  state.week=w;
+  setTimeout(()=>next('survey-3'), 180);
+}
+
+/* 알레르기: 단일 선택, '기타'는 직접 입력 */
+function pickAllergy(name, card){
+  document.querySelector('[data-screen="survey-4"]').querySelectorAll('.opt-card,.list-btn').forEach(c=>c.classList.remove('sel'));
+  card.classList.add('sel');
+  const etc = document.getElementById('allergyEtc');
+  if(name==='기타'){
+    etc.classList.remove('hidden');
+    document.getElementById('allergyEtcInput').focus();
+    return;
+  }
+  etc.classList.add('hidden');
+  state.allergy = name;
+  setTimeout(()=> next('survey-5'), 180);
+}
+function confirmAllergyEtc(){
+  const v=document.getElementById('allergyEtcInput').value.trim();
+  if(!v){ toast('알레르기 약물명을 입력해주세요'); return; }
+  state.allergy = '기타: '+v;
+  next('survey-5');
+}
+
+/* 치료 중인 질환: 복수 선택, '기타'는 직접 입력 */
+function toggleDisease(name, chip){
+  chip.classList.toggle('sel');
+  const i=state.diseases.indexOf(name);
+  if(i>=0) state.diseases.splice(i,1); else state.diseases.push(name);
+}
+function toggleDiseaseEtc(chip){
+  chip.classList.toggle('sel');
+  const on=chip.classList.contains('sel');
+  document.getElementById('diseaseEtc').classList.toggle('hidden', !on);
+  if(on) document.getElementById('diseaseEtcInput').focus();
+}
+
+// 질환 단계 완료: 기타 저장 후 → (구매면)영양상담 → 임신
+function finishSurvey(){
+  const etcOn = !document.getElementById('diseaseEtc').classList.contains('hidden');
+  state.diseasesEtc = etcOn ? document.getElementById('diseaseEtcInput').value.trim() : '';
+  if(state.purpose==='약품/영양제 구매') next('supplement');
+  else next('survey-2');   // 임신
+}
+// 영양상담 완료: 기타 저장 후 → 임신
+function finishSupplement(){
+  const sEtcOn = !document.getElementById('suppEtc').classList.contains('hidden');
+  state.supplementsEtc = sEtcOn ? document.getElementById('suppEtcInput').value.trim() : '';
+  next('survey-2');   // 임신
+}
+
+/* 희망 건강기능식품 기능성: 복수 선택, '기타'는 직접 입력 */
+function toggleSupp(name, chip){
+  chip.classList.toggle('sel');
+  const i=state.supplements.indexOf(name);
+  if(i>=0) state.supplements.splice(i,1); else state.supplements.push(name);
+}
+function toggleSuppEtc(chip){
+  chip.classList.toggle('sel');
+  const on=chip.classList.contains('sel');
+  document.getElementById('suppEtc').classList.toggle('hidden', !on);
+  if(on) document.getElementById('suppEtcInput').focus();
+}
+
+/* ===== 마이데이터 ===== */
+// 마이데이터 연동 결과 예시(약물카드)
+const MYDATA_CARDS = [
+  {date:'2026-05-27', hospital:'원스병원', pharmacy:'햇살약국', drug:'아목시실린 캡슐 250mg',
+   dose:'1정', times:'3회', days:'5일', hTel:'02-1250-3275', pTel:'02-3275-1250'},
+  {date:'2026-04-12', hospital:'미래내과의원', pharmacy:'온누리약국', drug:'에스시탈로프람정 10mg',
+   dose:'1정', times:'1회', days:'30일', hTel:'02-552-0987', pTel:'02-553-1100'},
+  {date:'2026-03-03', hospital:'연세이비인후과', pharmacy:'햇살약국', drug:'트라조돈정 50mg',
+   dose:'1정', times:'취침전', days:'14일', hTel:'02-771-3322', pTel:'02-3275-1250'},
+  {date:'2026-02-18', hospital:'서울정형외과', pharmacy:'바른약국', drug:'이부프로펜정 400mg',
+   dose:'1정', times:'2회', days:'7일', hTel:'02-445-9090', pTel:'02-446-7788'},
+];
+
+function validateInput(){
+  const name=document.getElementById('md_name').value.trim();
+  const telco=document.getElementById('md_telco').value;
+  const phone=document.getElementById('md_phone').value.trim();
+  if(!name||!telco||!phone){ toast('본명·통신사·휴대폰 번호를 입력해주세요'); return; }
+  state.name=name;
+  next('mydata-loading');           // 연동 대기화면
+  setTimeout(advanceLoading, 2000); // 연동 완료 → 약물카드
+}
+function advanceLoading(){
+  if(current!=='mydata-loading') return; // 사용자가 뒤로 갔으면 중단
+  renderMedCards();
+  show('mydata-cards', true);            // 대기화면은 스택에 남기지 않음(뒤로가기=조회입력)
+  current='mydata-cards';
+}
+function renderMedCards(){
+  const wrap=document.getElementById('medCardList');
+  wrap.innerHTML='';
+  MYDATA_CARDS.forEach((c,i)=>{
+    const div=document.createElement('div');
+    div.className='med-card';
+    div.dataset.idx=i;
+    div.onclick=()=>toggleMedCard(div,i);
+    div.innerHTML=`
+      <div class="mc-check">✓</div>
+      <div class="mc-date">${c.date} 조제</div>
+      <div class="mc-org"><b>병의원</b> ${c.hospital} · <b>약국</b> ${c.pharmacy}</div>
+      <div class="mc-drug">${c.drug}</div>
+      <div class="mc-dose">${c.dose} ${c.times} ${c.days}</div>
+      <div class="mc-meta">
+        <div class="row"><span><b>병원</b> ${c.hTel}</span><span><b>약국</b> ${c.pTel}</span></div>
+      </div>`;
+    wrap.appendChild(div);
+  });
+}
+function toggleMedCard(div, i){
+  div.classList.toggle('sel');
+  const arr=state.mydataSelected;
+  const k=arr.indexOf(i);
+  if(k>=0) arr.splice(k,1); else arr.push(i);
+}
+// 약물카드 선택 확인 → 사전문진 계속(전송은 마지막에 1회)
+function sendMydata(){
+  if(state.mydataSelected.length===0){ toast('공유할 복약 정보를 선택해주세요'); return; }
+  state.mydataCards = state.mydataSelected.map(i=>MYDATA_CARDS[i]);
+  toast(`복약 정보 ${state.mydataCards.length}건 선택 완료`);
+  setTimeout(()=>next('survey-4'), 700);   // 다음: 알레르기
+}
+
+/* 최종 전송(사전문진 완료) */
+function submitToPharmacist(){
+  if(state.breastfeeding===null){ toast('수유 여부를 선택해주세요'); return; }
+  const dEtcOn = !document.getElementById('diseaseEtc').classList.contains('hidden');
+  state.diseasesEtc = dEtcOn ? document.getElementById('diseaseEtcInput').value.trim() : '';
+  const sEtcOn = !document.getElementById('suppEtc').classList.contains('hidden');
+  state.supplementsEtc = sEtcOn ? document.getElementById('suppEtcInput').value.trim() : '';
+  // 호출번호(접수번호) 발급
+  state.callNo = ++callSeq;
+  document.getElementById('doneCallNo').textContent = state.callNo;
+  console.log('약사 웹으로 전송될 접수 데이터:', JSON.stringify(state,null,2));
+  next('complete');
+  setTimeout(resetAll, 6000);
+}
+
+/* ===== 리셋 ===== */
+function resetAll(){
+  stack.length=0;
+  Object.assign(state,{purpose:null,hasPrescription:false,takingMeds:null,
+    name:null,mydataSelected:[],mydataCards:[],pregnant:null,week:null,
+    breastfeeding:null,allergy:null,diseases:[],diseasesEtc:'',
+    supplements:[],supplementsEtc:'',callNo:null});
+  document.querySelectorAll('.opt-card,.list-btn,.chip,.med-card').forEach(c=>c.classList.remove('sel'));
+  document.querySelectorAll('input').forEach(i=>i.value='');
+  document.getElementById('medCardList').innerHTML='';
+  document.getElementById('allergyEtc').classList.add('hidden');
+  document.getElementById('diseaseEtc').classList.add('hidden');
+  document.getElementById('suppEtc').classList.add('hidden');
+  retakeShot();
+  current='start'; show('start',true);
+}
+
+/* ===== 토스트 ===== */
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+/* 초기화 */
+show('start', true);
+</script>
+</body>
+</html>
